@@ -1,0 +1,245 @@
+--SPEED FORCE CLIENTSIDE GEAR EDITION SON
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+
+local used = false
+local used2 = false
+local MaxSpeed = 105
+local moveSpeed = 65
+local velocityConnection = nil
+
+-- Tool
+local tool = Instance.new("Tool")
+tool.Name = "Speed Force"
+tool.RequiresHandle = false
+tool.Parent = LocalPlayer.Backpack
+
+LocalPlayer.CharacterAdded:Connect(function(c)
+    Character = c
+end)
+
+local function makeSound(id, vol, speed, looped, maxDist)
+    local s = Instance.new("Sound")
+    s.SoundId = "rbxassetid://" .. id
+    s.Volume = vol
+    s.PlaybackSpeed = speed
+    s.Looped = looped or false
+    s.MaxDistance = maxDist or 75
+    return s
+end
+
+local function makeLightning(name, color1, color2, texId)
+    local trail = Instance.new("Trail")
+    trail.Name = name
+    trail.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, color1),
+        ColorSequenceKeypoint.new(1, color2)
+    })
+    trail.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0),
+        NumberSequenceKeypoint.new(0.5, 0),
+        NumberSequenceKeypoint.new(1, 1)
+    })
+    trail.Enabled = false
+    trail.FaceCamera = true
+    trail.Lifetime = 1.3
+    trail.LightEmission = 1
+    trail.MinLength = 0
+    trail.Texture = "rbxassetid://" .. texId
+    trail.TextureLength = 40
+    trail.TextureMode = Enum.TextureMode.Static
+    return trail
+end
+
+local function makeTing()
+    local p = Instance.new("ParticleEmitter")
+    p.Name = "Ting"
+    p.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 60, 0))
+    })
+    p.Enabled = false
+    p.Lifetime = NumberRange.new(0.06, 0.06)
+    p.LightEmission = 1
+    p.Rate = 75
+    p.Rotation = NumberRange.new(-360, 360)
+    p.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 2.25),
+        NumberSequenceKeypoint.new(0.5, 2.5625),
+        NumberSequenceKeypoint.new(1, 0)
+    })
+    p.Speed = NumberRange.new(0, 0)
+    p.Texture = "rbxassetid://1241655501"
+    p.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0),
+        NumberSequenceKeypoint.new(0.494, 0),
+        NumberSequenceKeypoint.new(1, 1)
+    })
+    p.ZOffset = 1
+    return p
+end
+
+local function startVelocityMove()
+    if velocityConnection then velocityConnection:Disconnect() end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local HumanoidRootPart = char:FindFirstChild("HumanoidRootPart")
+    local Humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not HumanoidRootPart or not Humanoid then return end
+
+    velocityConnection = RunService.Heartbeat:Connect(function()
+        local moveDir = Humanoid.MoveDirection
+        local newVelocity = Vector3.new(moveDir.X, 0, moveDir.Z) * moveSpeed
+        HumanoidRootPart.Velocity = HumanoidRootPart.Velocity:Lerp(
+            Vector3.new(newVelocity.X, HumanoidRootPart.Velocity.Y, newVelocity.Z),
+            0.45
+        )
+    end)
+end
+
+local function stopVelocityMove()
+    if velocityConnection then
+        velocityConnection:Disconnect()
+        velocityConnection = nil
+    end
+end
+
+local function Destroy()
+    if used2 == true then
+        if used then return end
+        used = true
+        local char = LocalPlayer.Character
+        if not char then return end
+
+        stopVelocityMove()
+
+        local upper = char:FindFirstChild("UpperTorso")
+        local hrt = char:FindFirstChild("HumanoidRootPart")
+
+        local shockEnd = makeSound(186130717, 0.65, 1.5, false, 100)
+        shockEnd.Parent = upper or hrt
+        shockEnd:Play()
+
+        if hrt then
+            if hrt:FindFirstChild("PointLight") then hrt.PointLight:Destroy() end
+            if hrt:FindFirstChild("Electric") then hrt.Electric:Destroy() end
+        end
+
+        if upper then
+            if upper:FindFirstChild("Ting") then upper.Ting.Enabled = false end
+            if upper:FindFirstChild("Red Lightning") then upper["Red Lightning"].Enabled = false end
+            if upper:FindFirstChild("Orange Lightning") then upper["Orange Lightning"].Enabled = false end
+            if upper:FindFirstChild("Attachment0") then upper.Attachment0:Destroy() end
+            if upper:FindFirstChild("Attachment1") then upper.Attachment1:Destroy() end
+        end
+
+        local movement = char:FindFirstChild("BodyEffects") and char.BodyEffects:FindFirstChild("Movement")
+        if movement and movement:FindFirstChild("SuperSpeed") then
+            movement.SuperSpeed:Destroy()
+        end
+
+        task.wait(1.2)
+        shockEnd:Destroy()
+        if upper then
+            if upper:FindFirstChild("Ting") then upper.Ting:Destroy() end
+            if upper:FindFirstChild("Orange Lightning") then upper["Orange Lightning"]:Destroy() end
+            if upper:FindFirstChild("Red Lightning") then upper["Red Lightning"]:Destroy() end
+        end
+
+        task.wait(0.8)
+        used = false
+        used2 = false
+    end
+end
+
+tool.Activated:Connect(function()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local upper = char:FindFirstChild("UpperTorso")
+    local hrt = char:FindFirstChild("HumanoidRootPart")
+    if not upper or not hrt then return end
+
+    if used2 == false then
+        if used then return end
+        used = true
+
+        local shock = makeSound(186130717, 0.65, 1.15, false, 100)
+        shock.Parent = upper
+        shock:Play()
+
+        local electric = makeSound(165796875, 0.6, 1.5, true, 75)
+        electric.Name = "Electric"
+        electric.Parent = hrt
+
+        local ting = makeTing()
+        ting.Parent = upper
+        ting.Enabled = true
+
+        local light = Instance.new("PointLight", hrt)
+        light.Color = Color3.fromRGB(255, 40, 0)
+        light.Brightness = 10
+        light.Range = 3
+
+        local att0 = Instance.new("Attachment", upper)
+        att0.Position = Vector3.new(1.5, -1, 0)
+        att0.Name = "Attachment0"
+
+        local att1 = Instance.new("Attachment", upper)
+        att1.Position = Vector3.new(-1.5, 1, 0)
+        att1.Name = "Attachment1"
+
+        -- Red lightning trail
+        local red = makeLightning(
+            "Red Lightning",
+            Color3.fromRGB(255, 0, 0),
+            Color3.fromRGB(200, 0, 0),
+            "57202933"
+        )
+        red.Parent = upper
+        red.Attachment0 = att0
+        red.Attachment1 = att1
+        red.Enabled = true
+
+        -- Orange lightning trail
+        local orange = makeLightning(
+            "Orange Lightning",
+            Color3.fromRGB(255, 120, 0),
+            Color3.fromRGB(255, 60, 0),
+            "15450782"
+        )
+        orange.Parent = upper
+        orange.Attachment0 = att0
+        orange.Attachment1 = att1
+        orange.Enabled = true
+
+        local movement = char:FindFirstChild("BodyEffects") and char.BodyEffects:FindFirstChild("Movement")
+        if movement then
+            local speedbool = Instance.new("NumberValue", movement)
+            speedbool.Name = "SuperSpeed"
+        end
+
+        startVelocityMove()
+
+        task.wait(0.2)
+        electric:Play()
+        task.wait(2)
+        used = false
+        used2 = true
+        shock:Destroy()
+
+    elseif used2 == true then
+        if used then return end
+        used = false
+        Destroy()
+    end
+end)
+
+tool.Equipped:Connect(function()
+    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+end)
+
+tool.Unequipped:Connect(function()
+    -- removed stopVelocityMove() so speed persists after unequip
+end)
