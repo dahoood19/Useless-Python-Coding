@@ -1,0 +1,96 @@
+--Came out of DA HOOD Literally so its 100% Accurate
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+local character = Player.Character or Player.CharacterAdded:Wait()
+
+local scale = 1
+local INTERVAL = 0.1
+local STEP = 0.08
+
+local function applyScale(s)
+	character:ScaleTo(s)
+end
+
+Player.CharacterAdded:Connect(function(newCharacter)
+	character = newCharacter
+	applyScale(scale)
+end)
+
+local sizeUp = Instance.new("Tool")
+sizeUp.Name = "SizeUp"
+sizeUp.RequiresHandle = false
+sizeUp.Parent = Player.Backpack
+
+local OwnerTagUp = Instance.new("ObjectValue")
+OwnerTagUp.Name = "OwnerTag"
+OwnerTagUp.Parent = sizeUp
+
+local LoopUp = nil
+local lastTickUp = 0
+
+sizeUp.Equipped:Connect(function()
+	OwnerTagUp.Value = sizeUp.Parent
+end)
+
+sizeUp.Activated:Connect(function()
+	if LoopUp ~= nil then return end
+	LoopUp = RunService.Heartbeat:Connect(function()
+		if not sizeUp:IsDescendantOf(Player.Character) then
+			LoopUp:Disconnect()
+			LoopUp = nil
+			return
+		end
+		local now = tick()
+		if now - lastTickUp < INTERVAL then return end
+		lastTickUp = now
+		scale = scale + STEP
+		applyScale(scale)
+	end)
+end)
+
+sizeUp.Deactivated:Connect(function()
+	if LoopUp then
+		LoopUp:Disconnect()
+		LoopUp = nil
+	end
+end)
+
+local sizeDown = Instance.new("Tool")
+sizeDown.Name = "SizeDown"
+sizeDown.RequiresHandle = false
+sizeDown.Parent = Player.Backpack
+
+local OwnerTagDown = Instance.new("ObjectValue")
+OwnerTagDown.Name = "OwnerTag"
+OwnerTagDown.Parent = sizeDown
+
+local LoopDown = nil
+local lastTickDown = 0
+
+sizeDown.Equipped:Connect(function()
+	OwnerTagDown.Value = sizeDown.Parent
+end)
+
+sizeDown.Activated:Connect(function()
+	if LoopDown ~= nil then return end
+	LoopDown = RunService.Heartbeat:Connect(function()
+		if not sizeDown:IsDescendantOf(Player.Character) then
+			LoopDown:Disconnect()
+			LoopDown = nil
+			return
+		end
+		local now = tick()
+		if now - lastTickDown < INTERVAL then return end
+		lastTickDown = now
+		scale = math.max(0.1, scale - STEP)
+		applyScale(scale)
+	end)
+end)
+
+sizeDown.Deactivated:Connect(function()
+	if LoopDown then
+		LoopDown:Disconnect()
+		LoopDown = nil
+	end
+end)
