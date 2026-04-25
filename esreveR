@@ -1,0 +1,183 @@
+--REVERSE FLASH BEST REMAKE OF ALL
+--MINE BEST REMAKE CLIENTSIDE EZ
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Backpack = Player:WaitForChild("Backpack")
+
+local Tool = Instance.new("Tool")
+Tool.Name = "ReverseFlashOutfit"
+Tool.RequiresHandle = true
+
+local Handle = Instance.new("Part")
+Handle.Name = "Handle"
+Handle.Size = Vector3.new(0.261, 2.094, 2.023)
+Handle.BrickColor = BrickColor.new(Color3.fromRGB(255, 170, 0))
+Handle.Material = Enum.Material.Plastic
+Handle.CanCollide = false
+Handle.Parent = Tool
+Tool.GripRight = Vector3.new(0, 0, 1)
+
+local Mask = Instance.new("Folder")
+Mask.Name = "Mask"
+Mask.Parent = Tool
+
+Tool.Parent = Backpack
+
+local enalbed = false
+
+Toggle1 = Instance.new("BoolValue")
+Toggle1.Value = false
+Toggle2 = Instance.new("BoolValue")
+Toggle2.Value = false
+
+local SuitShirt = Instance.new("Shirt")
+SuitShirt.Name = "SuitShirt"
+SuitShirt.ShirtTemplate = "http://www.roblox.com/asset/?id=225825714"
+
+local SuitPants = Instance.new("Pants")
+SuitPants.Name = "SuitPants"
+SuitPants.PantsTemplate = "http://www.roblox.com/asset/?id=155933853"
+
+local originalHeadColor = nil
+local originalHeadMaterial = nil
+local savedFace = nil
+
+local function playAnimation(animId)
+    local char = Player.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    local animator = hum:FindFirstChildOfClass("Animator")
+    if not animator then return end
+    local anim = Instance.new("Animation")
+    anim.AnimationId = "rbxassetid://" .. animId
+    local track = animator:LoadAnimation(anim)
+    track:Play()
+    track.Stopped:Connect(function()
+        anim:Destroy()
+    end)
+end
+
+local function applyOutfit(vCharacter)
+    local Head = vCharacter:WaitForChild("Head")
+
+    originalHeadColor = Head.BrickColor
+    originalHeadMaterial = Head.Material
+
+    for _, child in ipairs(Head:GetChildren()) do
+        if child:IsA("Decal") then
+            savedFace = child
+            child.Parent = Mask
+        end
+    end
+
+    local hatAsset = game:GetObjects("rbxassetid://83942087409059")[1]
+    hatAsset.Name = "ReverseFlashHat"
+    hatAsset.Parent = vCharacter
+
+    local hatHandle = hatAsset:WaitForChild("Handle")
+    hatHandle.CFrame = Head.CFrame * CFrame.new(0, 0, 0) * CFrame.Angles(0, math.rad(180), 0)
+
+    for _, part in ipairs(hatAsset:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+            part.Massless = true
+        end
+    end
+
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = Head
+    weld.Part1 = hatHandle
+    weld.Parent = hatHandle
+end
+
+local function removeOutfit(vCharacter)
+    local Head = vCharacter:FindFirstChild("Head")
+
+    if Head then
+        if originalHeadColor then Head.BrickColor = originalHeadColor end
+        if originalHeadMaterial then Head.Material = originalHeadMaterial end
+
+        if savedFace then
+            savedFace.Parent = Head
+            savedFace = nil
+        end
+    end
+
+    local existingHat = vCharacter:FindFirstChild("ReverseFlashHat")
+    if existingHat then existingHat:Destroy() end
+
+    for _, child in pairs(vCharacter:GetChildren()) do
+        if child.ClassName == "Accessory" then
+            local h = child:FindFirstChild("Handle")
+            if h then h.Transparency = 0 end
+        end
+    end
+
+    if Mask:FindFirstChild("Shirt") then Mask.Shirt.Parent = vCharacter end
+    if Mask:FindFirstChild("Pants") then Mask.Pants.Parent = vCharacter end
+
+    SuitShirt.Parent = Mask
+    SuitPants.Parent = Mask
+end
+
+Tool.Unequipped:Connect(function()
+end)
+
+Tool.Activated:Connect(function()
+    if Toggle1.Value == false then
+        if enalbed then return end
+        enalbed = true
+
+        Character = Player.Character or Player.CharacterAdded:Wait()
+        Handle.Transparency = 1
+
+        local vCharacter = Character
+        local Humanoid = vCharacter:FindFirstChild("Humanoid")
+        local shirt = vCharacter:FindFirstChild("Shirt")
+        local pants = vCharacter:FindFirstChild("Pants")
+
+        Toggle1.Value = true
+
+        for _, child in pairs(vCharacter:GetChildren()) do
+            if child.ClassName == "Accessory" then
+                local h = child:FindFirstChild("Handle")
+                if h then h.Transparency = 1 end
+            end
+        end
+
+        Humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+
+        SuitShirt.Parent = vCharacter
+        SuitPants.Parent = vCharacter
+
+        playAnimation(3380627692)
+        applyOutfit(vCharacter)
+
+        if shirt then shirt.Parent = Mask end
+        if pants then pants.Parent = Mask end
+
+        enalbed = false
+
+    elseif Toggle1.Value == true then
+        if enalbed then return end
+        enalbed = true
+
+        Character = Player.Character or Player.CharacterAdded:Wait()
+        local vCharacter = Character
+        local human = vCharacter:FindFirstChild("Humanoid")
+
+        playAnimation(3380629232)
+        removeOutfit(vCharacter)
+
+        Toggle1.Value = false
+        Toggle2.Value = false
+
+        Handle.Transparency = 0
+        human.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+
+        wait(2)
+        enalbed = false
+    end
+end)
