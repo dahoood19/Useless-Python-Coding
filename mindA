@@ -1,0 +1,875 @@
+-- THIS SCRIPT TOOK A WHILE TO MAKE, PRIVATE SOURCE ONLY SO YEAH
+--THIS IS VERY FUN BUT ALSO CLIENTSIDED SO DONT EXPECT ANYTHING TO WORK.
+
+-- ─────────────────────────────────────────────
+--  CONFIG
+-- ─────────────────────────────────────────────
+local HIDE_LOCAL_PLAYER_ESP = true
+local PROXIMITY = 60
+local AIM_DOT_THRESHOLD = 0.85
+
+-- ─────────────────────────────────────────────
+--  SERVICES
+-- ─────────────────────────────────────────────
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+local GroupService = game:GetService("GroupService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local function showNotification(title, body, duration)
+	StarterGui:SetCore("SendNotification", {
+		Title = title,
+		Text = body,
+		Duration = duration or 5,
+	})
+end
+
+local function applyButtonEffect(btn)
+	local baseColor = btn.BackgroundColor3
+	local hoverColor = Color3.new(
+		math.clamp(baseColor.R * 0.75, 0, 1),
+		math.clamp(baseColor.G * 0.75, 0, 1),
+		math.clamp(baseColor.B * 0.75, 0, 1)
+	)
+	btn.MouseEnter:Connect(function() btn.BackgroundColor3 = hoverColor end)
+	btn.MouseLeave:Connect(function() btn.BackgroundColor3 = baseColor end)
+end
+
+-- ─────────────────────────────────────────────
+--  GROUP CACHE
+-- ─────────────────────────────────────────────
+local groupCache = {}
+
+local function getFamousGroupName(targetPlayer)
+	if groupCache[targetPlayer.UserId] ~= nil then
+		return groupCache[targetPlayer.UserId]
+	end
+	local success, groups = pcall(function()
+		return GroupService:GetGroupsAsync(targetPlayer.UserId)
+	end)
+	if success and groups then
+		for _, g in ipairs(groups) do
+			if g.MemberCount and g.MemberCount >= 30000 then
+				groupCache[targetPlayer.UserId] = g.Name
+				return g.Name
+			end
+		end
+	end
+	groupCache[targetPlayer.UserId] = false
+	return false
+end
+
+-- ─────────────────────────────────────────────
+--  GUI SETUP
+-- ─────────────────────────────────────────────
+for _, old in ipairs(playerGui:GetChildren()) do
+	if old.Name == "AdminPanel" then old:Destroy() end
+end
+
+local adminPanel = Instance.new("ScreenGui")
+adminPanel.Name = "AdminPanel"
+adminPanel.ResetOnSpawn = false
+adminPanel.Parent = playerGui
+
+local PANEL_POS = UDim2.new(0.620000005, 655, 0.0651465803, 30)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "Frame"
+mainFrame.BackgroundTransparency = 1
+mainFrame.BorderSizePixel = 0
+mainFrame.Position = PANEL_POS
+mainFrame.Size = UDim2.new(0, 554, 0, 484)
+mainFrame.Visible = false
+mainFrame.Parent = adminPanel
+
+local topBG = Instance.new("Frame")
+topBG.BackgroundColor3 = Color3.new(1, 1, 1)
+topBG.BorderSizePixel = 0
+topBG.Size = UDim2.new(1, 0, 0, 120)
+topBG.Parent = mainFrame
+
+local bottomBG = Instance.new("Frame")
+bottomBG.BackgroundColor3 = Color3.new(1, 1, 1)
+bottomBG.BorderSizePixel = 0
+bottomBG.Position = UDim2.new(0, 0, 0, 123)
+bottomBG.Size = UDim2.new(1, 0, 0, 361)
+bottomBG.Parent = mainFrame
+
+local hideButton = Instance.new("TextButton")
+hideButton.Name = "HideButton"
+hideButton.Parent = adminPanel
+hideButton.BackgroundColor3 = Color3.new(1, 1, 1)
+hideButton.BorderColor3 = Color3.new(0, 0, 0)
+hideButton.Size = UDim2.new(0, 69, 0, 24)
+hideButton.Font = Enum.Font.SourceSans
+hideButton.Text = "Hide"
+hideButton.TextColor3 = Color3.new(0, 0, 0)
+hideButton.TextScaled = false
+hideButton.TextSize = 26
+hideButton.Visible = false
+applyButtonEffect(hideButton)
+
+local panelHidden = false
+local isAnimating = false
+
+local function updateHideButtonPos()
+	local screenSize = workspace.CurrentCamera.ViewportSize
+	local absX = PANEL_POS.X.Scale * screenSize.X + PANEL_POS.X.Offset
+	local absY = PANEL_POS.Y.Scale * screenSize.Y + PANEL_POS.Y.Offset
+	if panelHidden then
+		hideButton.Position = UDim2.new(0, screenSize.X - hideButton.Size.X.Offset, 0, absY + 35)
+	else
+		hideButton.Position = UDim2.new(0, absX - 69, 0, absY + 35)
+	end
+end
+updateHideButtonPos()
+
+local setESPVisible
+
+local function easeOutCubic(t) return 1 - (1 - t) ^ 3 end
+
+local function slidePanel(toHide)
+	if isAnimating then return end
+	isAnimating = true
+	local screenSize = workspace.CurrentCamera.ViewportSize
+	local btnW = hideButton.Size.X.Offset
+	local absY = PANEL_POS.Y.Scale * screenSize.Y + PANEL_POS.Y.Offset
+	local STEPS = 50
+	local DURATION = 0.55
+	if toHide then
+		hideButton.Text = "Show"
+		local startXpx = PANEL_POS.X.Scale * screenSize.X + PANEL_POS.X.Offset
+		local targetXpx = screenSize.X
+		for i = 1, STEPS do
+			local eased = easeOutCubic(i / STEPS)
+			local newXpx = startXpx + (targetXpx - startXpx) * eased
+			local newBtnX = math.min(newXpx - 69, screenSize.X - btnW)
+			mainFrame.Position = UDim2.new(0, newXpx, PANEL_POS.Y.Scale, PANEL_POS.Y.Offset)
+			hideButton.Position = UDim2.new(0, newBtnX, 0, absY + 35)
+			task.wait(DURATION / STEPS)
+		end
+		mainFrame.Position = UDim2.new(0, screenSize.X, PANEL_POS.Y.Scale, PANEL_POS.Y.Offset)
+		hideButton.Position = UDim2.new(0, screenSize.X - btnW, 0, absY + 35)
+		panelHidden = true
+		setESPVisible(false)
+	else
+		hideButton.Text = "Hide"
+		local startXpx = screenSize.X
+		local targetXpx = PANEL_POS.X.Scale * screenSize.X + PANEL_POS.X.Offset
+		for i = 1, STEPS do
+			local eased = easeOutCubic(i / STEPS)
+			local newXpx = startXpx + (targetXpx - startXpx) * eased
+			local newBtnX = math.min(newXpx - 69, screenSize.X - btnW)
+			mainFrame.Position = UDim2.new(0, newXpx, PANEL_POS.Y.Scale, PANEL_POS.Y.Offset)
+			hideButton.Position = UDim2.new(0, newBtnX, 0, absY + 35)
+			task.wait(DURATION / STEPS)
+		end
+		mainFrame.Position = PANEL_POS
+		panelHidden = false
+		updateHideButtonPos()
+		setESPVisible(true)
+	end
+	isAnimating = false
+end
+
+hideButton.MouseButton1Click:Connect(function()
+	slidePanel(not panelHidden)
+end)
+
+-- ─────────────────────────────────────────────
+--  BUTTONS
+-- ─────────────────────────────────────────────
+local leftButtonsFolder = Instance.new("Folder")
+leftButtonsFolder.Name = "Left Buttons"
+leftButtonsFolder.Parent = mainFrame
+
+local FindServerID = Instance.new("TextButton")
+FindServerID.Parent = leftButtonsFolder
+FindServerID.BackgroundColor3 = Color3.fromRGB(175, 255, 95)
+FindServerID.BorderColor3 = Color3.new(0, 0, 0)
+FindServerID.Size = UDim2.new(0, 290, 0, 38)
+FindServerID.Font = Enum.Font.SourceSans
+FindServerID.Text = "Find Player Server ID"
+FindServerID.TextColor3 = Color3.new(0, 0, 0)
+FindServerID.TextScaled = true
+FindServerID.AutoButtonColor = false
+applyButtonEffect(FindServerID)
+
+local FindServerID = Instance.new("TextButton")
+FindServerID.Parent = leftButtonsFolder
+FindServerID.BackgroundColor3 = Color3.fromRGB(175, 255, 95)
+FindServerID.BorderColor3 = Color3.new(0, 0, 0)
+FindServerID.Size = UDim2.new(0, 276, 0, 38)
+FindServerID.Font = Enum.Font.SourceSans
+FindServerID.Text = "Find Player Server ID"
+FindServerID.TextColor3 = Color3.new(0, 0, 0)
+FindServerID.TextScaled = false
+FindServerID.TextSize = 34
+FindServerID.AutoButtonColor = false
+applyButtonEffect(FindServerID)
+
+local JoinServer = Instance.new("TextButton")
+JoinServer.Parent = leftButtonsFolder
+JoinServer.BackgroundColor3 = Color3.fromRGB(115, 115, 185)
+JoinServer.BorderColor3 = Color3.new(0, 0, 0)
+JoinServer.Position = UDim2.new(0, 0, 0.0782886744, 0)
+JoinServer.Size = UDim2.new(0, 276, 0, 39)
+JoinServer.Font = Enum.Font.SourceSans
+JoinServer.Text = "Join Server"
+JoinServer.TextColor3 = Color3.new(0, 0, 0)
+JoinServer.TextScaled = true
+JoinServer.AutoButtonColor = false
+applyButtonEffect(JoinServer)
+
+local PERMA = Instance.new("TextButton")
+PERMA.Parent = leftButtonsFolder
+PERMA.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
+PERMA.BorderColor3 = Color3.new(0, 0, 0)
+PERMA.Position = UDim2.new(0, 0, 0.156759471, 0)
+PERMA.Size = UDim2.new(0, 276, 0, 22)
+PERMA.Font = Enum.Font.SourceSans
+PERMA.Text = "PERMA"
+PERMA.TextColor3 = Color3.new(0, 0, 0)
+PERMA.TextScaled = true
+PERMA.AutoButtonColor = false
+applyButtonEffect(PERMA)
+
+local UNBAN = Instance.new("TextButton")
+UNBAN.Parent = leftButtonsFolder
+UNBAN.BackgroundColor3 = Color3.fromRGB(200, 165, 155)
+UNBAN.BorderColor3 = Color3.new(0, 0, 0)
+UNBAN.Position = UDim2.new(0, 0, 0.201025069, 0)
+UNBAN.Size = UDim2.new(0, 276, 0, 22)
+UNBAN.Font = Enum.Font.SourceSans
+UNBAN.Text = "UNBAN"
+UNBAN.TextColor3 = Color3.new(0, 0, 0)
+UNBAN.TextScaled = true
+UNBAN.AutoButtonColor = false
+applyButtonEffect(UNBAN)
+
+local rightInputFolder = Instance.new("Folder")
+rightInputFolder.Name = "Right Input"
+rightInputFolder.Parent = mainFrame
+
+local PlayerNameInput = Instance.new("TextBox")
+PlayerNameInput.Parent = rightInputFolder
+PlayerNameInput.BackgroundColor3 = Color3.new(1, 1, 1)
+PlayerNameInput.BorderColor3 = Color3.new(0, 0, 0)
+PlayerNameInput.Position = UDim2.new(0, 276, 0, 0)
+PlayerNameInput.Size = UDim2.new(1, -276, 0, 38)
+PlayerNameInput.Font = Enum.Font.SourceSans
+PlayerNameInput.PlaceholderText = "PlayerName"
+PlayerNameInput.PlaceholderColor3 = Color3.new(0, 0, 0)
+PlayerNameInput.Text = ""
+PlayerNameInput.TextColor3 = Color3.new(0, 0, 0)
+PlayerNameInput.TextScaled = true
+
+local JoinServerInput = Instance.new("TextBox")
+JoinServerInput.Parent = rightInputFolder
+JoinServerInput.BackgroundColor3 = Color3.new(1, 1, 1)
+JoinServerInput.BorderColor3 = Color3.new(0, 0, 0)
+JoinServerInput.Position = UDim2.new(0, 276, 0.0781892985, 0)
+JoinServerInput.Size = UDim2.new(1, -276, 0, 38)
+JoinServerInput.Font = Enum.Font.SourceSans
+JoinServerInput.PlaceholderText = " "
+JoinServerInput.PlaceholderColor3 = Color3.new(0, 0, 0)
+JoinServerInput.Text = ""
+JoinServerInput.TextColor3 = Color3.new(0, 0, 0)
+JoinServerInput.TextScaled = true
+
+local PermaInput = Instance.new("TextBox")
+PermaInput.Parent = rightInputFolder
+PermaInput.BackgroundColor3 = Color3.new(1, 1, 1)
+PermaInput.BorderColor3 = Color3.new(0, 0, 0)
+PermaInput.Position = UDim2.new(0, 276, 0.156759471, 0)
+PermaInput.Size = UDim2.new(1, -276, 0, 22)
+PermaInput.Font = Enum.Font.SourceSans
+PermaInput.PlaceholderText = "UserID"
+PermaInput.PlaceholderColor3 = Color3.new(0, 0, 0)
+PermaInput.Text = ""
+PermaInput.TextColor3 = Color3.new(0, 0, 0)
+PermaInput.TextScaled = true
+
+local UnbanInput = Instance.new("TextBox")
+UnbanInput.Parent = rightInputFolder
+UnbanInput.BackgroundColor3 = Color3.new(1, 1, 1)
+UnbanInput.BorderColor3 = Color3.new(0, 0, 0)
+UnbanInput.Position = UDim2.new(0, 276, 0.201025069, 0)
+UnbanInput.Size = UDim2.new(1, -276, 0, 22)
+UnbanInput.Font = Enum.Font.SourceSans
+UnbanInput.PlaceholderText = "UserID"
+UnbanInput.PlaceholderColor3 = Color3.new(0, 0, 0)
+UnbanInput.Text = ""
+UnbanInput.TextColor3 = Color3.new(0, 0, 0)
+UnbanInput.TextScaled = true
+
+-- ─────────────────────────────────────────────
+--  PLAYER LIST
+-- ─────────────────────────────────────────────
+local banLogicScroll = Instance.new("ScrollingFrame")
+banLogicScroll.Name = "BanLogicScroll"
+banLogicScroll.Parent = mainFrame
+banLogicScroll.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+banLogicScroll.BackgroundTransparency = 0.3
+banLogicScroll.BorderSizePixel = 1
+banLogicScroll.BorderColor3 = Color3.new(0.5, 0.5, 0.5)
+banLogicScroll.Position = UDim2.new(0, 0, 0, 123)
+banLogicScroll.Size = UDim2.new(0, 554, 0, 359)
+banLogicScroll.CanvasSize = UDim2.new(0, 554, 0, 0)
+banLogicScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+banLogicScroll.ScrollBarThickness = 8
+banLogicScroll.ScrollBarImageColor3 = Color3.new(209, 209, 209)
+banLogicScroll.ScrollingDirection = Enum.ScrollingDirection.Y
+banLogicScroll.ElasticBehavior = Enum.ElasticBehavior.Never
+
+local banLogic = Instance.new("Frame")
+banLogic.Name = "BanLogic"
+banLogic.BackgroundTransparency = 1
+banLogic.Size = UDim2.new(1, 0, 0, 0)
+banLogic.AutomaticSize = Enum.AutomaticSize.Y
+banLogic.Parent = banLogicScroll
+
+local BTN_H = 44
+local BTN_W = 138
+local BTN_W_SPECTATE = 140
+
+local templateBanUsername = Instance.new("TextButton")
+templateBanUsername.Name = "BanUsername"
+templateBanUsername.Parent = banLogic
+templateBanUsername.BackgroundColor3 = Color3.new(0.792157, 0, 0)
+templateBanUsername.BorderColor3 = Color3.new(0, 0, 0)
+templateBanUsername.Position = UDim2.new(0, 0, 0, 0)
+templateBanUsername.Size = UDim2.new(0, BTN_W, 0, BTN_H)
+templateBanUsername.Font = Enum.Font.Roboto
+templateBanUsername.Text = "BAN"
+templateBanUsername.TextColor3 = Color3.fromRGB(10, 34, 34)
+templateBanUsername.TextScaled = true
+templateBanUsername.AutoButtonColor = false
+templateBanUsername.Visible = false
+
+local templateUnbanButton = Instance.new("TextButton")
+templateUnbanButton.Name = "UnbanButton"
+templateUnbanButton.Parent = banLogic
+templateUnbanButton.BackgroundColor3 = Color3.fromRGB(43, 128, 67)
+templateUnbanButton.BorderColor3 = Color3.new(0, 0, 0)
+templateUnbanButton.Position = UDim2.new(0, BTN_W, 0, 0)
+templateUnbanButton.Size = UDim2.new(0, BTN_W, 0, BTN_H)
+templateUnbanButton.Font = Enum.Font.Roboto
+templateUnbanButton.Text = "UnBan"
+templateUnbanButton.TextColor3 = Color3.fromRGB(15, 35, 35)
+templateUnbanButton.TextSize = 50
+templateUnbanButton.AutoButtonColor = false
+templateUnbanButton.Visible = false
+
+local templateBanReason = Instance.new("TextBox")
+templateBanReason.Name = "BanReason"
+templateBanReason.Parent = banLogic
+templateBanReason.BackgroundColor3 = Color3.new(0.639216, 0.639216, 0.639216)
+templateBanReason.BorderColor3 = Color3.new(0, 0, 0)
+templateBanReason.Position = UDim2.new(0, BTN_W * 2, 0, 0)
+templateBanReason.Size = UDim2.new(0, BTN_W, 0, BTN_H)
+templateBanReason.Font = Enum.Font.Roboto
+templateBanReason.PlaceholderText = ""
+templateBanReason.PlaceholderColor3 = Color3.new(0, 0, 0)
+templateBanReason.Text = ""
+templateBanReason.TextScaled = true
+templateBanReason.TextColor3 = Color3.new(0, 0, 0)
+templateBanReason.Visible = false
+
+local banReasonLabel = Instance.new("TextLabel")
+banReasonLabel.Size = UDim2.new(1, 0, 1, 0)
+banReasonLabel.Position = UDim2.new(0, 0, 0, 0)
+banReasonLabel.BackgroundTransparency = 1
+banReasonLabel.Text = "Ban/UnBan\nNote Here"
+banReasonLabel.TextColor3 = Color3.new(0, 0, 0)
+banReasonLabel.Font = Enum.Font.Roboto
+banReasonLabel.TextScaled = false
+banReasonLabel.TextSize = 22
+banReasonLabel.TextWrapped = true
+banReasonLabel.Parent = templateBanReason
+
+templateBanReason:GetPropertyChangedSignal("Text"):Connect(function()
+	banReasonLabel.Visible = templateBanReason.Text == ""
+end)
+
+local templateSpectate = Instance.new("TextButton")
+templateSpectate.Name = "SpectateButton"
+templateSpectate.Parent = banLogic
+templateSpectate.BackgroundColor3 = Color3.new(1, 1, 1)
+templateSpectate.BorderColor3 = Color3.new(0, 0, 0)
+templateSpectate.Position = UDim2.new(0, BTN_W * 3, 0, 0)
+templateSpectate.Size = UDim2.new(0, BTN_W_SPECTATE, 0, BTN_H)
+templateSpectate.Font = Enum.Font.Roboto
+templateSpectate.Text = "Spectate"
+templateSpectate.TextColor3 = Color3.new(0, 0, 0)
+templateSpectate.TextScaled = false
+templateSpectate.TextSize = 40
+templateSpectate.AutoButtonColor = false
+templateSpectate.Visible = false
+
+local originalButtons = {
+	BanUsername    = templateBanUsername,
+	UnbanButton    = templateUnbanButton,
+	BanReason      = templateBanReason,
+	SpectateButton = templateSpectate,
+}
+
+local playerRows = {}
+local originalRowHeight = 50
+
+local function updateAllRowPositions()
+	local sortedPlayers = {}
+	for playerName in pairs(playerRows) do
+		table.insert(sortedPlayers, playerName)
+	end
+	table.sort(sortedPlayers, function(a, b) return a < b end)
+	for i, playerName in ipairs(sortedPlayers) do
+		local row = playerRows[playerName]
+		if row then
+			local yOffset = (i - 1) * originalRowHeight
+			for buttonName, button in pairs(row.buttons) do
+				local originalButton = originalButtons[buttonName]
+				if originalButton then
+					local op = originalButton.Position
+					button.Position = UDim2.new(op.X.Scale, op.X.Offset, op.Y.Scale, op.Y.Offset + yOffset)
+				end
+			end
+			row.rowIndex = i
+		end
+	end
+end
+
+local function removePlayerRow(playerName)
+	local row = playerRows[playerName]
+	if row then
+		for _, button in pairs(row.buttons) do button:Destroy() end
+		playerRows[playerName] = nil
+		updateAllRowPositions()
+	end
+end
+
+local spectatedPlayer = nil
+
+local function getOriginCharacter()
+	if spectatedPlayer and spectatedPlayer.Character then
+		return spectatedPlayer.Character
+	end
+	return player.Character
+end
+
+local function createPlayerRow(targetPlayer, rowIndex)
+	local playerName = targetPlayer.Name
+	local isLocalPlayer = (targetPlayer == player)
+	local yOffset = (rowIndex - 1) * originalRowHeight
+	local newRowButtons = {}
+
+	for buttonName, originalButton in pairs(originalButtons) do
+		local cloned = originalButton:Clone()
+		cloned.Name = buttonName .. "_" .. playerName
+		cloned.Parent = banLogic
+		cloned.Visible = true
+		local op = originalButton.Position
+		cloned.Position = UDim2.new(op.X.Scale, op.X.Offset, op.Y.Scale, op.Y.Offset + yOffset)
+
+		if buttonName == "BanUsername" then
+			cloned.Text = playerName
+			if isLocalPlayer then
+				cloned.BackgroundColor3 = Color3.new(0.792157, 0, 0)
+			end
+		elseif buttonName == "SpectateButton" then
+			cloned.Text = "Spectate"
+		elseif buttonName == "BanReason" then
+			cloned.Text = ""
+			cloned.PlaceholderText = ""
+			local lbl = cloned:FindFirstChildOfClass("TextLabel")
+			if lbl then lbl.Visible = true end
+			cloned.Focused:Connect(function()
+				if lbl then lbl.Visible = false end
+			end)
+			cloned.FocusLost:Connect(function()
+				if lbl then lbl.Visible = cloned.Text == "" end
+			end)
+		end
+
+		newRowButtons[buttonName] = cloned
+
+		if cloned:IsA("TextButton") then
+			applyButtonEffect(cloned)
+			cloned.MouseButton1Click:Connect(function()
+				if buttonName == "SpectateButton" then
+					if isLocalPlayer then return end
+					local cam = workspace.CurrentCamera
+					local myHumanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+					local targetChar = targetPlayer.Character
+					local targetHumanoid = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+					if not targetHumanoid then return end
+					if cam.CameraSubject == targetHumanoid then
+						spectatedPlayer = nil
+						if myHumanoid then
+							cam.CameraSubject = myHumanoid
+							cam.CameraType = Enum.CameraType.Custom
+						end
+					else
+						cam.CameraType = Enum.CameraType.Custom
+						cam.CameraSubject = targetHumanoid
+						spectatedPlayer = targetPlayer
+					end
+				end
+			end)
+		end
+	end
+
+	playerRows[playerName] = { buttons = newRowButtons, rowIndex = rowIndex }
+
+	task.spawn(function()
+		local famousGroup = getFamousGroupName(targetPlayer)
+		local row = playerRows[playerName]
+		if not row then return end
+		local banBtn = row.buttons["BanUsername"]
+		if not banBtn then return end
+		if famousGroup then
+			banBtn.Text = playerName .. "\n" .. famousGroup
+			banBtn.TextScaled = true
+		end
+	end)
+end
+
+FindServerID.MouseButton1Click:Connect(function() end)
+JoinServer.MouseButton1Click:Connect(function() end)
+PERMA.MouseButton1Click:Connect(function() end)
+UNBAN.MouseButton1Click:Connect(function() end)
+
+local function refreshPlayerList()
+	for _, row in pairs(playerRows) do
+		for _, button in pairs(row.buttons) do button:Destroy() end
+	end
+	playerRows = {}
+
+	local allPlayers = {}
+	for _, p in ipairs(Players:GetPlayers()) do
+		table.insert(allPlayers, p)
+	end
+	table.sort(allPlayers, function(a, b) return a.Name < b.Name end)
+
+	for rowIndex, p in ipairs(allPlayers) do
+		createPlayerRow(p, rowIndex)
+	end
+end
+
+Players.PlayerAdded:Connect(function(newPlayer)
+	refreshPlayerList()
+end)
+
+Players.PlayerRemoving:Connect(function(leftPlayer)
+	local cam = workspace.CurrentCamera
+	local leftHumanoid = leftPlayer.Character and leftPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if leftHumanoid and cam.CameraSubject == leftHumanoid then
+		spectatedPlayer = nil
+		local myHumanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if myHumanoid then
+			cam.CameraSubject = myHumanoid
+			cam.CameraType = Enum.CameraType.Custom
+		end
+	end
+	removePlayerRow(leftPlayer.Name)
+end)
+
+-- ─────────────────────────────────────────────
+--  ESP
+-- ─────────────────────────────────────────────
+local BLUE = Color3.fromRGB(215, 255, 255)
+local RED  = Color3.fromRGB(255, 0, 0)
+
+local function getOriginPosition()
+	local originChar = getOriginCharacter()
+	if originChar then
+		local torso = originChar:FindFirstChild("UpperTorso") or originChar:FindFirstChild("Torso")
+		if torso then return torso.Position end
+	end
+	return nil
+end
+
+local function isNearOrigin(targetCharacter)
+	local origin = getOriginPosition()
+	if not origin then return false end
+	local torso = targetCharacter:FindFirstChild("UpperTorso") or targetCharacter:FindFirstChild("Torso")
+	if not torso then return false end
+	return (torso.Position - origin).Magnitude <= PROXIMITY
+end
+
+local function applyESP(espPlayer, character)
+	if espPlayer == player and HIDE_LOCAL_PLAYER_ESP then return end
+
+	local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+	if not torso then return end
+
+	local existing = torso:FindFirstChild("ESP")
+	if existing then existing:Destroy() end
+
+	local isMe = espPlayer == player
+	local isNear = not isMe and isNearOrigin(character)
+	local nameColor = (isMe or isNear) and BLUE or RED
+
+	local famousGroup = not isMe and getFamousGroupName(espPlayer) or false
+	local billboardHeight = famousGroup and 38 or 22
+
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "ESP"
+	billboard.Adornee = torso
+	billboard.Size = UDim2.new(0, 200, 0, billboardHeight)
+	billboard.AlwaysOnTop = true
+	billboard.StudsOffset = Vector3.new(0, 0, 0)
+	billboard.Enabled = mainFrame.Visible
+	billboard.Parent = torso
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "NameLabel"
+	nameLabel.Size = famousGroup and UDim2.new(1, 0, 0.5, 0) or UDim2.new(1, 0, 1, 0)
+	nameLabel.Position = UDim2.new(0, 0, 0, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.TextScaled = false
+	nameLabel.TextSize = 35
+	nameLabel.Font = Enum.Font.SourceSansSemibold
+	nameLabel.Text = espPlayer.Name
+	nameLabel.TextColor3 = isMe and BLUE or nameColor
+	nameLabel.Parent = billboard
+
+	if famousGroup then
+		local subLabel = Instance.new("TextLabel")
+		subLabel.Name = "SubLabel"
+		subLabel.Size = UDim2.new(1, 0, 0.5, 0)
+		subLabel.Position = UDim2.new(0, 0, 0.5, 0)
+		subLabel.BackgroundTransparency = 1
+		subLabel.TextScaled = false
+		subLabel.TextSize = 18
+		subLabel.Font = Enum.Font.GothamBold
+		subLabel.Text = famousGroup
+		subLabel.TextColor3 = isMe and BLUE or nameColor
+		subLabel.Parent = billboard
+	end
+end
+
+task.spawn(function()
+	while true do
+		task.wait(0.5)
+		if mainFrame.Visible then
+			for _, p in ipairs(Players:GetPlayers()) do
+				if p.Character then applyESP(p, p.Character) end
+			end
+		end
+	end
+end)
+
+local function setupESP(espPlayer)
+	if espPlayer.Character then applyESP(espPlayer, espPlayer.Character) end
+	espPlayer.CharacterAdded:Connect(function(char)
+		task.wait()
+		applyESP(espPlayer, char)
+	end)
+end
+
+setESPVisible = function(visible)
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p == player and HIDE_LOCAL_PLAYER_ESP then continue end
+		if p.Character then
+			local torso = p.Character:FindFirstChild("UpperTorso") or p.Character:FindFirstChild("Torso")
+			if torso then
+				local esp = torso:FindFirstChild("ESP")
+				if esp then esp.Enabled = visible end
+			end
+		end
+	end
+end
+
+for _, p in ipairs(Players:GetPlayers()) do setupESP(p) end
+Players.PlayerAdded:Connect(setupESP)
+
+-- ─────────────────────────────────────────────
+--  AIM BEAM
+-- ─────────────────────────────────────────────
+local beamParts = {}
+
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function hasGunScript(character)
+	for _, item in ipairs(character:GetChildren()) do
+		if item:IsA("Tool") then
+			for _, child in ipairs(item:GetChildren()) do
+				if child:IsA("Script") and child.Name == "GunScript" then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+local function getAimedTarget(headPos, lookDir, excludeCharacter)
+	local bestDot = AIM_DOT_THRESHOLD
+	local bestPos = nil
+	for _, p in ipairs(Players:GetPlayers()) do
+		if not p.Character or p.Character == excludeCharacter then continue end
+		local torso = p.Character:FindFirstChild("UpperTorso") or p.Character:FindFirstChild("Torso")
+		if not torso then continue end
+		if (torso.Position - headPos).Magnitude > PROXIMITY then continue end
+		local dot = lookDir:Dot((torso.Position - headPos).Unit)
+		if dot > bestDot then
+			bestDot = dot
+			bestPos = torso.Position
+		end
+	end
+	return bestPos
+end
+
+local function getOrCreateBeam(userId)
+	if beamParts[userId] and beamParts[userId].Parent then
+		return beamParts[userId]
+	end
+	local part = Instance.new("Part")
+	part.Name = "AimBeam_" .. userId
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CastShadow = false
+	part.Material = Enum.Material.Neon
+	part.Color = Color3.fromRGB(255, 0, 0)
+	part.Transparency = 0.15
+	part.Size = Vector3.new(0, 0, 0)
+	part.CFrame = CFrame.new(0, -10000, 0)
+	part.Parent = workspace
+	beamParts[userId] = part
+	return part
+end
+
+local function hideBeam(userId)
+	local b = beamParts[userId]
+	if b and b.Parent then
+		b.Size = Vector3.new(0, 0, 0)
+		b.CFrame = CFrame.new(0, -10000, 0)
+	end
+end
+
+local function updateBeam(userId, fromPos, toPos)
+	local length = (toPos - fromPos).Magnitude
+	if length < 0.1 then hideBeam(userId) return end
+	local beam = getOrCreateBeam(userId)
+	local mid = (fromPos + toPos) / 2
+	local dir = (toPos - fromPos).Unit
+	beam.Size = Vector3.new(0.12, 0.12, length)
+	beam.CFrame = CFrame.lookAt(mid, mid + dir)
+end
+
+local function destroyBeam(userId)
+	local b = beamParts[userId]
+	if b and b.Parent then b:Destroy() end
+	beamParts[userId] = nil
+end
+
+local function getProximityOriginPos()
+	local originChar = getOriginCharacter()
+	if not originChar then return nil end
+	local torso = originChar:FindFirstChild("UpperTorso") or originChar:FindFirstChild("Torso")
+	return torso and torso.Position or nil
+end
+
+RunService.Heartbeat:Connect(function()
+	if not mainFrame.Visible then
+		for userId in pairs(beamParts) do hideBeam(userId) end
+		return
+	end
+
+	local myPos = getProximityOriginPos()
+
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p == player then continue end
+		if spectatedPlayer and p == spectatedPlayer then continue end
+
+		local character = p.Character
+		if not character then hideBeam(p.UserId) continue end
+
+		if not hasGunScript(character) then hideBeam(p.UserId) continue end
+
+		if myPos then
+			local theirTorso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+			if not theirTorso or (theirTorso.Position - myPos).Magnitude > PROXIMITY then
+				hideBeam(p.UserId)
+				continue
+			end
+		else
+			hideBeam(p.UserId)
+			continue
+		end
+
+		local head = character:FindFirstChild("Head")
+		local rHand = character:FindFirstChild("RightHand")
+		if not head or not rHand then hideBeam(p.UserId) continue end
+
+		local headPos = head.Position
+		local lookDir = head.CFrame.LookVector
+		local target = getAimedTarget(headPos, lookDir, character)
+		if not target then hideBeam(p.UserId) continue end
+
+		rayParams.FilterDescendantsInstances = { character }
+		local result = workspace:Raycast(rHand.Position, lookDir * 500, rayParams)
+		local endPos = result and result.Position or (rHand.Position + lookDir * 500)
+		updateBeam(p.UserId, rHand.Position, endPos)
+	end
+end)
+
+Players.PlayerRemoving:Connect(function(leaving)
+	destroyBeam(leaving.UserId)
+end)
+
+player.CharacterRemoving:Connect(function()
+	for userId in pairs(beamParts) do destroyBeam(userId) end
+end)
+
+-- ─────────────────────────────────────────────
+--  KEYBIND
+-- ─────────────────────────────────────────────
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.B then
+		if isAnimating then return end
+		if mainFrame.Visible then
+			if panelHidden then
+				task.spawn(function()
+					slidePanel(false)
+					task.wait(0.05)
+					mainFrame.Visible = false
+					hideButton.Visible = false
+					panelHidden = false
+					hideButton.Text = "Hide"
+					mainFrame.Position = PANEL_POS
+					setESPVisible(false)
+				end)
+			else
+				mainFrame.Visible = false
+				hideButton.Visible = false
+				panelHidden = false
+				hideButton.Text = "Hide"
+				mainFrame.Position = PANEL_POS
+				setESPVisible(false)
+			end
+		else
+			mainFrame.Visible = true
+			hideButton.Visible = true
+			panelHidden = false
+			hideButton.Text = "Hide"
+			mainFrame.Position = PANEL_POS
+			refreshPlayerList()
+			updateHideButtonPos()
+			setESPVisible(true)
+		end
+	end
+end)
+
+task.wait(1)
+refreshPlayerList()
+showNotification("Admin Panel Loaded", "Enjoy made by 2jgv for da hood")
+print("modded ap by me da hood edition")
