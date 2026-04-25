@@ -1,0 +1,343 @@
+--MY SHAZAM AFTER MOST GOT DELETED THIS IS MINES
+--ITS ACCURATE MOST ACCURATE
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local mouse = player:GetMouse()
+
+local isCustom = false
+local originalShirt = nil
+local originalPants = nil
+local addedAccessories = {}
+
+local root = character:WaitForChild("HumanoidRootPart")
+local camera = workspace.CurrentCamera
+
+local activation = Instance.new("Sound")
+activation.SoundId = "rbxassetid://2952274135"
+activation.Looped = false
+activation.Parent = root
+
+local flyTool = Instance.new("Tool")
+flyTool.Name = "Fly"
+flyTool.RequiresHandle = false
+
+-- == FLY STATE ==
+local flyActive = false
+local flyConnections = {}
+local hoverTrack = nil
+local flyTrack = nil
+local isMoving = false
+
+local FLIGHT_SPEED = 70
+
+local function loadAnim(id)
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if not animator then
+		animator = Instance.new("Animator")
+		animator.Parent = humanoid
+	end
+	local anim = Instance.new("Animation")
+	anim.AnimationId = "rbxassetid://" .. id
+	return animator:LoadAnimation(anim)
+end
+
+local function stopFly()
+	flyActive = false
+
+	if hoverTrack then hoverTrack:Stop() hoverTrack = nil end
+	if flyTrack then flyTrack:Stop() flyTrack = nil end
+
+	for _, conn in pairs(flyConnections) do
+		conn:Disconnect()
+	end
+	flyConnections = {}
+
+	local char = player.Character
+	if char then
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		local hum = char:FindFirstChild("Humanoid")
+		if hrp then
+			hrp.Anchored = false
+			hrp.AssemblyLinearVelocity = Vector3.zero
+		end
+		if hum then
+			hum.PlatformStand = false
+		end
+	end
+
+	isMoving = false
+end
+
+local function startFly()
+	if flyActive then return end
+	flyActive = true
+
+	local char = player.Character
+	if not char then return end
+	local hrp = char:WaitForChild("HumanoidRootPart")
+	local hum = char:WaitForChild("Humanoid")
+
+	hrp.Anchored = true
+	hum.PlatformStand = true
+
+	hoverTrack = loadAnim(3541114300)
+	hoverTrack.Looped = true
+	hoverTrack:Play()
+
+	flyTrack = loadAnim(3541044388)
+	flyTrack.Looped = true
+
+	local runConn = RunService.RenderStepped:Connect(function(dt)
+		if not flyActive or not char or not hrp then return end
+
+		local moveDir = hum.MoveDirection
+		local isPressingMove = moveDir.Magnitude > 0.1
+
+		local velocity = Vector3.zero
+
+		if isPressingMove then
+			local camLook = camera.CFrame.LookVector
+			local camRight = camera.CFrame.RightVector
+
+			local flat = Vector3.new(camLook.X, 0, camLook.Z).Unit
+			local flatRight = Vector3.new(camRight.X, 0, camRight.Z).Unit
+
+			local rawMove = hum.MoveDirection
+			local forwardAmt = rawMove:Dot(flat)
+			local rightAmt = rawMove:Dot(flatRight)
+
+			local thrustDir = (camLook * forwardAmt + camRight * rightAmt)
+			velocity = thrustDir * FLIGHT_SPEED
+		end
+
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+			velocity = velocity + Vector3.new(0, FLIGHT_SPEED, 0)
+		elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+			velocity = velocity + Vector3.new(0, -FLIGHT_SPEED, 0)
+		end
+
+		hrp.CFrame = CFrame.new(hrp.Position + velocity * dt)
+			* CFrame.fromEulerAnglesYXZ(0, select(2, camera.CFrame:ToEulerAnglesYXZ()), 0)
+
+		local moving = velocity.Magnitude > 0.1
+		if moving and not isMoving then
+			isMoving = true
+			if hoverTrack then hoverTrack:Stop() end
+			if flyTrack then flyTrack:Play() end
+		elseif not moving and isMoving then
+			isMoving = false
+			if flyTrack then flyTrack:Stop() end
+			if hoverTrack then hoverTrack:Play() end
+		end
+	end)
+
+	table.insert(flyConnections, runConn)
+end
+
+flyTool.Equipped:Connect(function()
+	activation:Play()
+	startFly()
+end)
+
+flyTool.Unequipped:Connect(function()
+	activation:Play()
+	stopFly()
+end)
+
+-- == SHAZAM EFFECTS ==
+
+local function playShazamAnim()
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if not animator then
+		animator = Instance.new("Animator")
+		animator.Parent = humanoid
+	end
+	local anim = Instance.new("Animation")
+	anim.AnimationId = "rbxassetid://180435571"
+	local track = animator:LoadAnimation(anim)
+	track:Play()
+end
+
+local function summonLightning()
+	local torso = character:FindFirstChild("LowerTorso") or character:FindFirstChild("Torso")
+	if torso then
+		local sound = torso:FindFirstChild("lightning_bolt")
+		if not sound then
+			sound = Instance.new("Sound")
+			sound.Name = "lightning_bolt"
+			sound.SoundId = "rbxassetid://821439273"
+			sound.Volume = 1
+			sound.Looped = false
+			sound.Parent = torso
+		end
+		sound:Play()
+	end
+
+	local angleRadians = math.rad(47)
+	local totalLength = 300
+	local horizontalOffset = math.sin(angleRadians) * totalLength
+	local verticalOffset = math.cos(angleRadians) * totalLength
+	local angle = math.rad(math.random(0, 360))
+	local x = math.cos(angle) * horizontalOffset
+	local z = math.sin(angle) * horizontalOffset
+	local endPos = root.Position
+	local startPos = endPos + Vector3.new(x, verticalOffset, z)
+	local midpoint = (startPos + endPos) / 2
+
+	local lightning = Instance.new("Part")
+	lightning.Size = Vector3.new(3.8, 300, 3.8)
+	lightning.Material = Enum.Material.Neon
+	lightning.Color = Color3.fromRGB(210, 215, 120)
+	lightning.Anchored = true
+	lightning.CanCollide = false
+	lightning.CFrame = CFrame.new(midpoint, endPos) * CFrame.Angles(math.rad(90), 0, 0)
+	lightning.Parent = workspace
+	local tween = TweenService:Create(lightning, TweenInfo.new(1.85), {Transparency = 1})
+	tween:Play()
+	tween.Completed:Once(function() lightning:Destroy() end)
+end
+
+local function addCape()
+	local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+	if not torso then return end
+
+	local old = character:FindFirstChild("ClientCape")
+	if old then old:Destroy() end
+
+	local accessory = game:GetObjects("rbxassetid://12785998017")[1]
+	if not accessory then return end
+	accessory.Name = "ClientCape"
+	accessory.Parent = character
+
+	local handle = accessory:FindFirstChild("Handle")
+	if not handle then return end
+
+	handle.Anchored = false
+	handle.CanCollide = false
+	handle.Massless = true
+
+	local weld = Instance.new("Weld")
+	weld.Part0 = torso
+	weld.Part1 = handle
+	weld.C0 = CFrame.new(0, -1.1, 0.75) * CFrame.Angles(0, math.rad(180), 0)
+	weld.Parent = torso
+
+	local humanoid = character:WaitForChild("Humanoid")
+	local mesh = handle:FindFirstChildOfClass("SpecialMesh") or handle:FindFirstChildOfClass("Mesh")
+	local originalScale = mesh and mesh.Scale
+
+	local function update()
+		local h = humanoid:FindFirstChild("BodyHeightScale") and humanoid.BodyHeightScale.Value or 1
+		local w = humanoid:FindFirstChild("BodyWidthScale") and humanoid.BodyWidthScale.Value or 1
+		local d = humanoid:FindFirstChild("BodyDepthScale") and humanoid.BodyDepthScale.Value or 1
+
+		if mesh and originalScale then
+			mesh.Scale = Vector3.new(
+				originalScale.X * w,
+				originalScale.Y * h,
+				originalScale.Z * d
+			)
+		end
+	end
+
+	update()
+
+	for _, n in ipairs({"BodyHeightScale","BodyWidthScale","BodyDepthScale"}) do
+		local s = humanoid:FindFirstChild(n)
+		if s then
+			s:GetPropertyChangedSignal("Value"):Connect(update)
+		end
+	end
+
+	table.insert(addedAccessories, accessory)
+end
+
+local function swapToCustom(shirtId, pantsId, shirtGraphicId)
+	local s = character:FindFirstChildOfClass("Shirt")
+	if s then originalShirt = s:Clone() end
+	local p = character:FindFirstChildOfClass("Pants")
+	if p then originalPants = p:Clone() end
+
+	for _, v in ipairs(character:GetChildren()) do
+		if v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") then v:Destroy() end
+	end
+	addedAccessories = {}
+
+	local shirt = Instance.new("Shirt")
+	shirt.ShirtTemplate = "rbxassetid://" .. shirtId
+	shirt.Parent = character
+
+	local pants = Instance.new("Pants")
+	pants.PantsTemplate = "rbxassetid://" .. pantsId
+	pants.Parent = character
+
+	addCape()
+	flyTool.Parent = player.Backpack
+	humanoid.MaxHealth = 1000
+	humanoid.Health = 1000
+	isCustom = true
+end
+
+local function swapToOriginal()
+	for _, v in ipairs(character:GetChildren()) do
+		if v:IsA("Shirt") or v:IsA("Pants") then v:Destroy() end
+	end
+	local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+	if torso then
+		local capeWeld = torso:FindFirstChild("CapeWeld")
+		if capeWeld then capeWeld:Destroy() end
+	end
+	for _, acc in ipairs(addedAccessories) do
+		if acc and acc.Parent then acc:Destroy() end
+	end
+	addedAccessories = {}
+	if originalShirt then originalShirt:Clone().Parent = character end
+	if originalPants then originalPants:Clone().Parent = character end
+	flyTool.Parent = nil
+	stopFly()
+	humanoid.MaxHealth = 100
+	humanoid.Health = math.min(humanoid.Health, 100)
+	isCustom = false
+end
+
+local variants = {
+	["shazam!"]  = {shirt = "5127212935", pants = "5128195686", graphic = "5127212935"},
+	["shazamb!"] = {shirt = "5127151181", pants = "5128214867", graphic = "5127151181"},
+	["shazamg!"] = {shirt = "5127225350", pants = "5128266542", graphic = "5127225350"},
+	["shazamy!"] = {shirt = "5127238495", pants = "5128193731", graphic = "5127238495"},
+}
+
+local function toggleShazam(shirtId, pantsId, shirtGraphicId)
+	character = player.Character or player.CharacterAdded:Wait()
+	humanoid = character:WaitForChild("Humanoid")
+	playShazamAnim()
+	summonLightning()
+	if isCustom then
+		swapToOriginal()
+	else
+		swapToCustom(shirtId, pantsId, shirtGraphicId)
+	end
+end
+
+player.Chatted:Connect(function(message)
+	local lower = message:lower()
+	local variant = variants[lower]
+	if variant then
+		toggleShazam(variant.shirt, variant.pants, variant.graphic)
+	end
+end)
+
+player.CharacterAdded:Connect(function(char)
+	character = char
+	humanoid = char:WaitForChild("Humanoid")
+	root = char:WaitForChild("HumanoidRootPart")
+	stopFly()
+	isCustom = false
+end)
