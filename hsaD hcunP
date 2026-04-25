@@ -1,0 +1,193 @@
+--DASH PUNCH 95% ACCURACY DUE TO ANIMATION UNKNOWN FOR ME
+--BUT EVERYTHING IS ACCURATE ENJOY.
+local Players    = game:GetService("Players")
+local lp         = Players.LocalPlayer
+local mouse      = lp:GetMouse()
+local char       = lp.Character or lp.CharacterAdded:Wait()
+local humanoidRP = char:WaitForChild("HumanoidRootPart")
+local humanoid   = char:WaitForChild("Humanoid")
+local upperTorso = char:WaitForChild("UpperTorso")
+
+local cooldown = true
+local tool     = nil
+
+local function makeTrail(name, c1, c2, tex, parent)
+    local t         = Instance.new("Trail")
+    t.Name          = name
+    t.Color         = ColorSequence.new{ ColorSequenceKeypoint.new(0,c1), ColorSequenceKeypoint.new(1,c2) }
+    t.Transparency  = NumberSequence.new{ NumberSequenceKeypoint.new(0,0), NumberSequenceKeypoint.new(0.5,0), NumberSequenceKeypoint.new(1,1) }
+    t.Lifetime      = 1.3
+    t.LightEmission = 1
+    t.FaceCamera    = true
+    t.MinLength     = 0
+    t.Texture       = tex
+    t.TextureLength = 40
+    t.TextureMode   = Enum.TextureMode.Static
+    t.Enabled       = false
+    t.Parent        = parent
+    return t
+end
+
+local function buildTool()
+    local t = Instance.new("Tool")
+    t.Name           = "Dash Punch"
+    t.RequiresHandle = false
+    t.CanBeDropped   = false
+
+    local anim       = Instance.new("Animation")
+    anim.AnimationId = "rbxassetid://2788309982"
+    anim.Parent      = t
+
+    local dashSnd         = Instance.new("Sound")
+    dashSnd.SoundId       = "rbxassetid://558640653"
+    dashSnd.PlaybackSpeed = 1.5
+    dashSnd.Parent        = t
+
+    local shockSnd        = Instance.new("Sound")
+    shockSnd.SoundId      = "rbxassetid://186130717"
+    shockSnd.PlaybackSpeed = 1.15
+    shockSnd.Parent       = t
+
+    makeTrail("Red Lightning",    Color3.fromRGB(255,0,0),   Color3.fromRGB(255,0,0),   "rbxassetid://57202933",  t)
+    makeTrail("Orange Lightning", Color3.fromRGB(255,106,0), Color3.fromRGB(255,210,0), "rbxassetid://15450782", t)
+
+    t.Parent = lp.Backpack
+    return t
+end
+
+local function doDashCombo(hitPart)
+    if not cooldown then return end
+    if not (tool and tool.Parent) then return end
+
+    local targetHum =
+        hitPart.Parent:FindFirstChild("Humanoid") or
+        hitPart.Parent.Parent:FindFirstChild("Humanoid") or
+        hitPart.Parent.Parent.Parent:FindFirstChild("Humanoid")
+
+    local targetRoot =
+        hitPart.Parent:FindFirstChild("UpperTorso") or
+        hitPart.Parent.Parent:FindFirstChild("UpperTorso")
+
+    if not (targetHum and targetRoot) then return end
+    if hitPart:IsDescendantOf(char) then return end
+
+    cooldown = false
+
+    local ani = humanoid:LoadAnimation(tool:FindFirstChild("Animation") or tool:FindFirstChildWhichIsA("Animation"))
+    ani:Play(0.2, 1, 0.5)
+
+    task.wait(0.5)
+
+    humanoidRP.Anchored = true
+
+    local pl = Instance.new("PointLight", humanoidRP)
+    pl.Color = Color3.new(1, 0.6, 0); pl.Brightness = 10; pl.Range = 8
+
+    local att0 = Instance.new("Attachment", upperTorso)
+    att0.Position = Vector3.new(1.5, -1, 0)
+    local att1 = Instance.new("Attachment", upperTorso)
+    att1.Position = Vector3.new(-1.5, 1, 0)
+
+    local red2 = tool["Red Lightning"]:Clone()
+    red2.Enabled = true; red2.Attachment0 = att0; red2.Attachment1 = att1
+    red2.Parent = upperTorso
+
+    local orange2 = tool["Orange Lightning"]:Clone()
+    orange2.Enabled = true; orange2.Attachment0 = att0; orange2.Attachment1 = att1
+    orange2.Parent = upperTorso
+
+    local d = tool:FindFirstChild("Sound") and tool.Sound:Clone() or Instance.new("Sound")
+    -- use dashSnd directly
+    local ds = tool:GetChildren()
+    for _, v in ipairs(ds) do
+        if v:IsA("Sound") and v.SoundId == "rbxassetid://558640653" then
+            local c = v:Clone(); c.Parent = upperTorso; c:Play()
+            game.Debris:AddItem(c, c.TimeLength)
+            break
+        end
+    end
+
+    local direction  = (targetRoot.Position - humanoidRP.Position).Unit
+    local throughPos = targetRoot.Position + direction * 10
+    throughPos = Vector3.new(throughPos.X, humanoidRP.Position.Y, throughPos.Z)
+    humanoidRP.CFrame = CFrame.new(throughPos, targetRoot.Position)
+
+    targetHum.Health = math.clamp(targetHum.Health - 15, 0.5, targetHum.MaxHealth)
+
+    local bodyFx = targetHum.Parent:FindFirstChild("BodyEffects")
+    if bodyFx and bodyFx:FindFirstChild("K.O") and bodyFx["K.O"].Value == true then
+        local bv    = Instance.new("BodyVelocity")
+        bv.MaxForce = Vector3.new(6e8, 6e8, 6e8)
+        bv.Velocity = direction * 80 + Vector3.new(0, 20, 0)
+        bv.Name     = "DashComboLOL"
+        bv.Parent   = targetRoot
+        game.Debris:AddItem(bv, 0.25)
+    end
+
+    for _, v in ipairs(tool:GetChildren()) do
+        if v:IsA("Sound") and v.SoundId == "rbxassetid://186130717" then
+            local c = v:Clone(); c.Parent = upperTorso; c:Play()
+            game.Debris:AddItem(c, c.TimeLength)
+            break
+        end
+    end
+
+    task.wait(0.6)
+
+    humanoidRP.Anchored = false
+    if pl and pl.Parent then pl:Destroy() end
+
+    red2.Enabled = false; orange2.Enabled = false
+    task.delay(1.3, function()
+        if red2.Parent    then red2:Destroy()    end
+        if orange2.Parent then orange2:Destroy() end
+    end)
+
+    att0:Destroy(); att1:Destroy()
+    task.wait(0.3)
+    cooldown = true
+end
+
+-- single click connection, never re-created
+mouse.Button1Down:Connect(function()
+    if not tool or tool.Parent ~= char then return end
+    if mouse.Target and mouse.Target.Parent then
+        task.spawn(doDashCombo, mouse.Target)
+    end
+end)
+
+local function setupChar(newChar)
+    char       = newChar
+    humanoidRP = newChar:WaitForChild("HumanoidRootPart")
+    humanoid   = newChar:WaitForChild("Humanoid")
+    upperTorso = newChar:WaitForChild("UpperTorso")
+    cooldown   = true
+
+    -- remove old tool if somehow still exists
+    if tool and tool.Parent then tool:Destroy() end
+    tool = buildTool()
+
+    -- destroy tool on death, don't give it back
+    humanoid.Died:Connect(function()
+        cooldown = true
+        if tool and tool.Parent then
+            tool:Destroy()
+            tool = nil
+        end
+    end)
+
+    tool.Equipped:Connect(function()
+        if not tool:FindFirstChild("OwnerTag") then
+            local tag  = Instance.new("ObjectValue")
+            tag.Name   = "OwnerTag"
+            tag.Value  = char
+            tag.Parent = tool
+        end
+    end)
+end
+
+setupChar(char)
+
+lp.CharacterAdded:Connect(function(newChar)
+    setupChar(newChar)
+end)
