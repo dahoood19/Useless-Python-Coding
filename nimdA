@@ -542,17 +542,12 @@ local function createPlayerRow(targetPlayer, rowIndex)
 	playerRows[playerName] = { buttons = newRowButtons, rowIndex = rowIndex }
 
 	task.spawn(function()
-		local famousGroup = getCrewGroupName(targetPlayer)
-		local row = playerRows[playerName]
-		if not row then return end
-		local banBtn = row.buttons["BanUsername"]
-		if not banBtn then return end
-		if famousGroup then
-			banBtn.Text = playerName .. "\n" .. famousGroup
-			banBtn.TextScaled = true
-		end
-	end)
-end  -- ← this closes createPlayerRow
+    local row = playerRows[playerName]
+    if not row then return end
+    local banBtn = row.buttons["BanUsername"]
+    if not banBtn then return end
+    banBtn.Text = playerName
+end)
 
 FindServerID.MouseButton1Click:Connect(function() end)
 JoinServer.MouseButton1Click:Connect(function() end)
