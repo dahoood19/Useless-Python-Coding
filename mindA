@@ -285,8 +285,8 @@ local PermaInput = Instance.new("TextBox")
 PermaInput.Parent = rightInputFolder
 PermaInput.BackgroundColor3 = Color3.new(1, 1, 1)
 PermaInput.BorderColor3 = Color3.new(0, 0, 0)
-PermaInput.Position = UDim2.new(0, 276, 0.156759471, 0)
-PermaInput.Size = UDim2.new(1, -276, 0, 22)
+PermaInput.Position = UDim2.new(0, 275, 0.156759471, 0)
+PermaInput.Size = UDim2.new(1, -275, 0, 20)
 PermaInput.Font = Enum.Font.SourceSans
 PermaInput.PlaceholderText = "UserID"
 PermaInput.PlaceholderColor3 = Color3.new(0, 0, 0)
@@ -689,144 +689,140 @@ for _, p in ipairs(Players:GetPlayers()) do setupESP(p) end
 Players.PlayerAdded:Connect(setupESP)
 
 -- ─────────────────────────────────────────────
---  AIM BEAM
+--  AIM BEAM (new detection, red laser kept)
 -- ─────────────────────────────────────────────
-local beamParts = {}
+local Terrain = workspace.Terrain
+local beamConnections = {}
+local beamObjects = {}
 
-local rayParams = RaycastParams.new()
-rayParams.FilterType = Enum.RaycastFilterType.Exclude
+local RED_BEAM_COLOR = ColorSequence.new(Color3.new(1, 0, 0), Color3.new(1, 0, 0))
 
-local function hasGunScript(character)
-	for _, item in ipairs(character:GetChildren()) do
-		if item:IsA("Tool") then
-			for _, child in ipairs(item:GetChildren()) do
-				if child:IsA("Script") and child.Name == "GunScript" then
-					return true
-				end
-			end
-		end
-	end
-	return false
+local function createRedBeam(character)
+	local head = character:WaitForChild("Head")
+	local faceCenterAtt = head:WaitForChild("FaceCenterAttachment")
+
+	local beam = Instance.new("Beam", character)
+	beam.Attachment0 = faceCenterAtt
+	beam.Enabled = false
+	beam.Width0 = 0.18
+	beam.Width1 = 0.18
+	beam.Transparency = NumberSequence.new(0)
+	beam.Color = RED_BEAM_COLOR
+	beam.LightEmission = 1
+	beam.LightInfluence = 0
+	beam.FaceCamera = true
+
+	local att1 = Instance.new("Attachment", Terrain)
+	beam.Attachment1 = att1
+
+	return beam, att1
 end
 
-local function getAimedTarget(headPos, lookDir, excludeCharacter)
-	local bestDot = AIM_DOT_THRESHOLD
-	local bestPos = nil
-	for _, p in ipairs(Players:GetPlayers()) do
-		if not p.Character or p.Character == excludeCharacter then continue end
-		local torso = p.Character:FindFirstChild("UpperTorso") or p.Character:FindFirstChild("Torso")
-		if not torso then continue end
-		if (torso.Position - headPos).Magnitude > PROXIMITY then continue end
-		local dot = lookDir:Dot((torso.Position - headPos).Unit)
-		if dot > bestDot then
-			bestDot = dot
-			bestPos = torso.Position
-		end
-	end
-	return bestPos
-end
+local function isBeamHit(beam, att1, mousePosValue)
+	local mousePos = mousePosValue
+	local myChar = player.Character
+	local origin = beam.Attachment0.WorldPosition
+	local direction = mousePos - origin
 
-local function getOrCreateBeam(userId)
-	if beamParts[userId] and beamParts[userId].Parent then
-		return beamParts[userId]
-	end
-	local part = Instance.new("Part")
-	part.Name = "AimBeam_" .. userId
-	part.Anchored = true
-	part.CanCollide = false
-	part.CanQuery = false
-	part.CastShadow = false
-	part.Material = Enum.Material.Neon
-	part.Color = Color3.fromRGB(255, 0, 0)
-	part.Transparency = 0.15
-	part.Size = Vector3.new(0, 0, 0)
-	part.CFrame = CFrame.new(0, -10000, 0)
-	part.Parent = workspace
-	beamParts[userId] = part
-	return part
-end
+	local rayParams = RaycastParams.new()
+	rayParams.FilterDescendantsInstances = { myChar, workspace.CurrentCamera }
 
-local function hideBeam(userId)
-	local b = beamParts[userId]
-	if b and b.Parent then
-		b.Size = Vector3.new(0, 0, 0)
-		b.CFrame = CFrame.new(0, -10000, 0)
-	end
-end
+	local result = workspace:Raycast(origin, direction * 2, rayParams)
 
-local function updateBeam(userId, fromPos, toPos)
-	local length = (toPos - fromPos).Magnitude
-	if length < 0.1 then hideBeam(userId) return end
-	local beam = getOrCreateBeam(userId)
-	local mid = (fromPos + toPos) / 2
-	local dir = (toPos - fromPos).Unit
-	beam.Size = Vector3.new(0.12, 0.12, length)
-	beam.CFrame = CFrame.lookAt(mid, mid + dir)
-end
-
-local function destroyBeam(userId)
-	local b = beamParts[userId]
-	if b and b.Parent then b:Destroy() end
-	beamParts[userId] = nil
-end
-
-local function getProximityOriginPos()
-	local originChar = getOriginCharacter()
-	if not originChar then return nil end
-	local torso = originChar:FindFirstChild("UpperTorso") or originChar:FindFirstChild("Torso")
-	return torso and torso.Position or nil
-end
-
-RunService.Heartbeat:Connect(function()
-	if not mainFrame.Visible then
-		for userId in pairs(beamParts) do hideBeam(userId) end
+	if not result then
+		att1.WorldPosition = mousePos
 		return
 	end
 
-	local myPos = getProximityOriginPos()
-
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p == player then continue end
-		if spectatedPlayer and p == spectatedPlayer then continue end
-
-		local character = p.Character
-		if not character then hideBeam(p.UserId) continue end
-
-		if not hasGunScript(character) then hideBeam(p.UserId) continue end
-
-		if myPos then
-			local theirTorso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
-			if not theirTorso or (theirTorso.Position - myPos).Magnitude > PROXIMITY then
-				hideBeam(p.UserId)
-				continue
-			end
+	if myChar then
+		if result.Instance:IsDescendantOf(myChar) then
+			beam.Color = RED_BEAM_COLOR
 		else
-			hideBeam(p.UserId)
-			continue
+			beam.Color = RED_BEAM_COLOR
 		end
-
-		local head = character:FindFirstChild("Head")
-		local rHand = character:FindFirstChild("RightHand")
-		if not head or not rHand then hideBeam(p.UserId) continue end
-
-		local headPos = head.Position
-		local lookDir = head.CFrame.LookVector
-		local target = getAimedTarget(headPos, lookDir, character)
-		if not target then hideBeam(p.UserId) continue end
-
-		rayParams.FilterDescendantsInstances = { character }
-		local result = workspace:Raycast(rHand.Position, lookDir * 500, rayParams)
-		local endPos = result and result.Position or (rHand.Position + lookDir * 500)
-		updateBeam(p.UserId, rHand.Position, endPos)
 	end
-end)
+
+	att1.WorldPosition = result.Position
+end
+
+local function setupBeamForCharacter(targetPlayer, character)
+	if not character then return end
+
+	local uid = targetPlayer.UserId
+
+	-- clean up old connections/beams for this player
+	if beamConnections[uid] then
+		for _, c in ipairs(beamConnections[uid]) do c:Disconnect() end
+	end
+	if beamObjects[uid] then
+		local old = beamObjects[uid]
+		if old.beam and old.beam.Parent then old.beam:Destroy() end
+		if old.att1 and old.att1.Parent then old.att1:Destroy() end
+	end
+
+	beamConnections[uid] = {}
+	beamObjects[uid] = {}
+
+	local ok, mousePosVal = pcall(function()
+		return character:WaitForChild("BodyEffects", 5):WaitForChild("MousePos", 5)
+	end)
+	if not ok or not mousePosVal then return end
+
+	local beam, att1 = createRedBeam(character)
+	beamObjects[uid] = { beam = beam, att1 = att1 }
+
+	isBeamHit(beam, att1, mousePosVal.Value)
+
+	local conn = mousePosVal.Changed:Connect(function()
+	if beam and beam.Parent then
+		beam.Enabled = mainFrame.Visible and character:FindFirstChild("GunScript", true) ~= nil and isNearOrigin(character)
+		if beam.Enabled then
+			isBeamHit(beam, att1, mousePosVal.Value)
+			end
+		end
+	end)
+	table.insert(beamConnections[uid], conn)
+
+	local addConn = character.DescendantAdded:Connect(function(d)
+	if d.Name == "GunScript" then
+		beam.Enabled = mainFrame.Visible and isNearOrigin(character)
+	end
+	end)
+	local remConn = character.DescendantRemoving:Connect(function(d)
+	if d.Name == "GunScript" then beam.Enabled = false end
+	end)
+	table.insert(beamConnections[uid], addConn)
+	table.insert(beamConnections[uid], remConn)
+end
+
+local function setupBeamForPlayer(targetPlayer)
+	if targetPlayer == player then return end
+	if targetPlayer.Character then
+		setupBeamForCharacter(targetPlayer, targetPlayer.Character)
+	end
+	targetPlayer.CharacterAdded:Connect(function(char)
+		task.wait()
+		setupBeamForCharacter(targetPlayer, char)
+	end)
+end
+
+for _, p in ipairs(Players:GetPlayers()) do
+	setupBeamForPlayer(p)
+end
+Players.PlayerAdded:Connect(setupBeamForPlayer)
 
 Players.PlayerRemoving:Connect(function(leaving)
-	destroyBeam(leaving.UserId)
-end)
-
-player.CharacterRemoving:Connect(function()
-	for userId in pairs(beamParts) do destroyBeam(userId) end
+	local uid = leaving.UserId
+	if beamConnections[uid] then
+		for _, c in ipairs(beamConnections[uid]) do c:Disconnect() end
+		beamConnections[uid] = nil
+	end
+	if beamObjects[uid] then
+		local obj = beamObjects[uid]
+		if obj.beam and obj.beam.Parent then obj.beam:Destroy() end
+		if obj.att1 and obj.att1.Parent then obj.att1:Destroy() end
+		beamObjects[uid] = nil
+	end
 end)
 
 -- ─────────────────────────────────────────────
