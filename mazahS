@@ -28,7 +28,6 @@ local flyTool = Instance.new("Tool")
 flyTool.Name = "Fly"
 flyTool.RequiresHandle = false
 
--- == FLY STATE ==
 local flyActive = false
 local flyConnections = {}
 local hoverTrack = nil
@@ -151,16 +150,18 @@ flyTool.Unequipped:Connect(function()
 	stopFly()
 end)
 
--- == SHAZAM EFFECTS ==
-
-local function playShazamAnim()
+local function playShazamAnim(transforming)
 	local animator = humanoid:FindFirstChildOfClass("Animator")
 	if not animator then
 		animator = Instance.new("Animator")
 		animator.Parent = humanoid
 	end
 	local anim = Instance.new("Animation")
-	anim.AnimationId = "rbxassetid://180435571"
+	if transforming then
+		anim.AnimationId = "rbxassetid://3380627692"
+	else
+		anim.AnimationId = "rbxassetid://3380629232"
+	end
 	local track = animator:LoadAnimation(anim)
 	track:Play()
 end
@@ -208,11 +209,9 @@ local function addCape()
 	local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
 	if not torso then return end
 
-	-- remove old cape
 	local old = character:FindFirstChild("ShazamCapeHandle")
 	if old then old:Destroy() end
 
-	-- HANDLE
 	local handle = Instance.new("Part")
 	handle.Name = "ShazamCapeHandle"
 	handle.Size = Vector3.new(2, 3, 0.1)
@@ -221,7 +220,6 @@ local function addCape()
 	handle.Color = Color3.fromRGB(255, 255, 255)
 	handle.Parent = character
 
-	-- MESH
 	local mesh = Instance.new("SpecialMesh")
 	mesh.MeshType = Enum.MeshType.FileMesh
 	mesh.MeshId = "rbxassetid://114046169"
@@ -229,7 +227,6 @@ local function addCape()
 	mesh.Scale = Vector3.new(1.457, 1.9, 1.279)
 	mesh.Parent = handle
 
-	-- WELD (Motor6D like you wanted)
 	local weld = Instance.new("Motor6D")
 	weld.Name = "CapeWeld"
 	weld.Part0 = torso
@@ -237,7 +234,6 @@ local function addCape()
 	weld.C0 = CFrame.new(0, -1.0, 0.45)
 	weld.Parent = torso
 
-	-- 🔥 SCALE SUPPORT (keeps it matching your size system)
 	local humanoid = character:WaitForChild("Humanoid")
 	local originalScale = mesh.Scale
 
@@ -323,11 +319,12 @@ local variants = {
 local function toggleShazam(shirtId, pantsId, shirtGraphicId)
 	character = player.Character or player.CharacterAdded:Wait()
 	humanoid = character:WaitForChild("Humanoid")
-	playShazamAnim()
 	summonLightning()
 	if isCustom then
+		playShazamAnim(false)
 		swapToOriginal()
 	else
+		playShazamAnim(true)
 		swapToCustom(shirtId, pantsId, shirtGraphicId)
 	end
 end
