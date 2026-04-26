@@ -44,21 +44,37 @@ end
 -- ─────────────────────────────────────────────
 local groupCache = {}
 
-local function getFamousGroupName(targetPlayer)
+local function getCrewGroupName(targetPlayer)
 	if groupCache[targetPlayer.UserId] ~= nil then
 		return groupCache[targetPlayer.UserId]
 	end
-	local success, groups = pcall(function()
-		return GroupService:GetGroupsAsync(targetPlayer.UserId)
+
+	local success, groupId = pcall(function()
+		local dataFolder = Players[targetPlayer.Name]:FindFirstChild("DataFolder")
+		if not dataFolder then return nil end
+		local info = dataFolder:FindFirstChild("Information")
+		if not info then return nil end
+		local crew = info:FindFirstChild("Crew")
+		if not crew then return nil end
+		local val = crew.Value
+		if not val or val == 0 or val == "" then return nil end
+		return tonumber(val)
 	end)
-	if success and groups then
-		for _, g in ipairs(groups) do
-			if g.MemberCount and g.MemberCount >= 30000 then
-				groupCache[targetPlayer.UserId] = g.Name
-				return g.Name
-			end
-		end
+
+	if not success or not groupId then
+		groupCache[targetPlayer.UserId] = false
+		return false
 	end
+
+	local ok, groupInfo = pcall(function()
+		return GroupService:GetGroupInfoAsync(groupId)
+	end)
+
+	if ok and groupInfo and groupInfo.Name then
+		groupCache[targetPlayer.UserId] = groupInfo.Name
+		return groupInfo.Name
+	end
+
 	groupCache[targetPlayer.UserId] = false
 	return false
 end
@@ -526,7 +542,7 @@ local function createPlayerRow(targetPlayer, rowIndex)
 	playerRows[playerName] = { buttons = newRowButtons, rowIndex = rowIndex }
 
 	task.spawn(function()
-		local famousGroup = getFamousGroupName(targetPlayer)
+		local famousGroup = getCrewGroupName(targetPlayer)
 		local row = playerRows[playerName]
 		if not row then return end
 		local banBtn = row.buttons["BanUsername"]
@@ -536,7 +552,7 @@ local function createPlayerRow(targetPlayer, rowIndex)
 			banBtn.TextScaled = true
 		end
 	end)
-end
+end  -- ← this closes createPlayerRow
 
 FindServerID.MouseButton1Click:Connect(function() end)
 JoinServer.MouseButton1Click:Connect(function() end)
@@ -614,7 +630,7 @@ local function applyESP(espPlayer, character)
 	local isNear = not isMe and isNearOrigin(character)
 	local nameColor = (isMe or isNear) and BLUE or RED
 
-	local famousGroup = not isMe and getFamousGroupName(espPlayer) or false
+	local famousGroup = not isMe and getCrewGroupName(espPlayer) or false  -- changed here
 	local billboardHeight = famousGroup and 38 or 22
 
 	local billboard = Instance.new("BillboardGui")
@@ -632,7 +648,7 @@ local function applyESP(espPlayer, character)
 	nameLabel.Position = UDim2.new(0, 0, 0, 0)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.TextScaled = false
-	nameLabel.TextSize = 35
+	nameLabel.TextSize = 32
 	nameLabel.Font = Enum.Font.SourceSansSemibold
 	nameLabel.Text = espPlayer.Name
 	nameLabel.TextColor3 = isMe and BLUE or nameColor
@@ -645,8 +661,8 @@ local function applyESP(espPlayer, character)
 		subLabel.Position = UDim2.new(0, 0, 0.5, 0)
 		subLabel.BackgroundTransparency = 1
 		subLabel.TextScaled = false
-		subLabel.TextSize = 18
-		subLabel.Font = Enum.Font.GothamBold
+		subLabel.TextSize = 30
+		subLabel.Font = Enum.Font.SourceSansSemibold
 		subLabel.Text = famousGroup
 		subLabel.TextColor3 = isMe and BLUE or nameColor
 		subLabel.Parent = billboard
@@ -689,60 +705,52 @@ for _, p in ipairs(Players:GetPlayers()) do setupESP(p) end
 Players.PlayerAdded:Connect(setupESP)
 
 -- ─────────────────────────────────────────────
---  AIM BEAM (new detection, red laser kept)
+--  AIM BEAM
 -- ─────────────────────────────────────────────
 local Terrain = workspace.Terrain
 local beamConnections = {}
 local beamObjects = {}
 
-local RED_BEAM_COLOR = ColorSequence.new(Color3.new(1, 0, 0), Color3.new(1, 0, 0))
+local beamParts = {}
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
 
-local function createRedBeam(character)
-	local head = character:WaitForChild("Head")
-	local faceCenterAtt = head:WaitForChild("FaceCenterAttachment")
-
-	local beam = Instance.new("Beam", character)
-	beam.Attachment0 = faceCenterAtt
-	beam.Enabled = false
-	beam.Width0 = 0.18
-	beam.Width1 = 0.18
-	beam.Transparency = NumberSequence.new(0)
-	beam.Color = RED_BEAM_COLOR
-	beam.LightEmission = 1
-	beam.LightInfluence = 0
-	beam.FaceCamera = true
-
-	local att1 = Instance.new("Attachment", Terrain)
-	beam.Attachment1 = att1
-
-	return beam, att1
+local function getOrCreateBeam(userId)
+	if beamParts[userId] and beamParts[userId].Parent then
+		return beamParts[userId]
+	end
+	local part = Instance.new("Part")
+	part.Name = "AimBeam_" .. userId
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CastShadow = false
+	part.Material = Enum.Material.Neon
+	part.Color = Color3.fromRGB(255, 0, 0)
+	part.Transparency = 0.15
+	part.Size = Vector3.new(0, 0, 0)
+	part.CFrame = CFrame.new(0, -10000, 0)
+	part.Parent = workspace
+	beamParts[userId] = part
+	return part
 end
 
-local function isBeamHit(beam, att1, mousePosValue)
-	local mousePos = mousePosValue
-	local myChar = player.Character
-	local origin = beam.Attachment0.WorldPosition
-	local direction = mousePos - origin
-
-	local rayParams = RaycastParams.new()
-	rayParams.FilterDescendantsInstances = { myChar, workspace.CurrentCamera }
-
-	local result = workspace:Raycast(origin, direction * 2, rayParams)
-
-	if not result then
-		att1.WorldPosition = mousePos
-		return
+local function hideBeam(userId)
+	local b = beamParts[userId]
+	if b and b.Parent then
+		b.Size = Vector3.new(0, 0, 0)
+		b.CFrame = CFrame.new(0, -10000, 0)
 	end
+end
 
-	if myChar then
-		if result.Instance:IsDescendantOf(myChar) then
-			beam.Color = RED_BEAM_COLOR
-		else
-			beam.Color = RED_BEAM_COLOR
-		end
-	end
-
-	att1.WorldPosition = result.Position
+local function updateBeam(userId, fromPos, toPos)
+	local length = (toPos - fromPos).Magnitude
+	if length < 0.1 then hideBeam(userId) return end
+	local beam = getOrCreateBeam(userId)
+	local mid = (fromPos + toPos) / 2
+	local dir = (toPos - fromPos).Unit
+	beam.Size = Vector3.new(0.12, 0.12, length)
+	beam.CFrame = CFrame.lookAt(mid, mid + dir)
 end
 
 local function setupBeamForCharacter(targetPlayer, character)
@@ -750,13 +758,11 @@ local function setupBeamForCharacter(targetPlayer, character)
 
 	local uid = targetPlayer.UserId
 
-	-- clean up old connections/beams for this player
 	if beamConnections[uid] then
 		for _, c in ipairs(beamConnections[uid]) do c:Disconnect() end
 	end
 	if beamObjects[uid] then
 		local old = beamObjects[uid]
-		if old.beam and old.beam.Parent then old.beam:Destroy() end
 		if old.att1 and old.att1.Parent then old.att1:Destroy() end
 	end
 
@@ -768,28 +774,27 @@ local function setupBeamForCharacter(targetPlayer, character)
 	end)
 	if not ok or not mousePosVal then return end
 
-	local beam, att1 = createRedBeam(character)
-	beamObjects[uid] = { beam = beam, att1 = att1 }
-
-	isBeamHit(beam, att1, mousePosVal.Value)
-
 	local conn = mousePosVal.Changed:Connect(function()
-	if beam and beam.Parent then
-		beam.Enabled = mainFrame.Visible and character:FindFirstChild("GunScript", true) ~= nil and isNearOrigin(character)
-		if beam.Enabled then
-			isBeamHit(beam, att1, mousePosVal.Value)
-			end
+		if not (mainFrame.Visible and character:FindFirstChild("GunScript", true) ~= nil and isNearOrigin(character)) then
+			hideBeam(uid)
+			return
 		end
+		local head = character:FindFirstChild("Head")
+		if not head then return end
+		updateBeam(uid, head.Position, mousePosVal.Value)
 	end)
 	table.insert(beamConnections[uid], conn)
 
 	local addConn = character.DescendantAdded:Connect(function(d)
-	if d.Name == "GunScript" then
-		beam.Enabled = mainFrame.Visible and isNearOrigin(character)
-	end
+		if d.Name == "GunScript" then
+			local head = character:FindFirstChild("Head")
+			if mainFrame.Visible and isNearOrigin(character) and head then
+				updateBeam(uid, head.Position, mousePosVal.Value)
+			end
+		end
 	end)
 	local remConn = character.DescendantRemoving:Connect(function(d)
-	if d.Name == "GunScript" then beam.Enabled = false end
+		if d.Name == "GunScript" then hideBeam(uid) end
 	end)
 	table.insert(beamConnections[uid], addConn)
 	table.insert(beamConnections[uid], remConn)
@@ -819,9 +824,12 @@ Players.PlayerRemoving:Connect(function(leaving)
 	end
 	if beamObjects[uid] then
 		local obj = beamObjects[uid]
-		if obj.beam and obj.beam.Parent then obj.beam:Destroy() end
 		if obj.att1 and obj.att1.Parent then obj.att1:Destroy() end
 		beamObjects[uid] = nil
+	end
+	if beamParts[uid] and beamParts[uid].Parent then
+		beamParts[uid]:Destroy()
+		beamParts[uid] = nil
 	end
 end)
 
