@@ -1,4 +1,4 @@
---DASH PUNCH 95% ACCURACY DUE TO ANIMATION UNKNOWN FOR ME
+--DASH PUNCH 96% ACCURACY DUE TO ANIMATION UNKNOWN FOR ME
 --BUT EVERYTHING IS ACCURATE ENJOY.
 local Players    = game:GetService("Players")
 local lp         = Players.LocalPlayer
@@ -112,7 +112,7 @@ local function doDashCombo(hitPart)
     throughPos = Vector3.new(throughPos.X, humanoidRP.Position.Y, throughPos.Z)
     humanoidRP.CFrame = CFrame.new(throughPos, targetRoot.Position)
 
-    targetHum.Health = math.clamp(targetHum.Health - 15, 0.5, targetHum.MaxHealth)
+    --targetHum.Health = math.clamp(targetHum.Health - 15, 0.5, targetHum.MaxHealth)
 
     local bodyFx = targetHum.Parent:FindFirstChild("BodyEffects")
     if bodyFx and bodyFx:FindFirstChild("K.O") and bodyFx["K.O"].Value == true then
