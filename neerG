@@ -1,0 +1,44 @@
+if not game:GetService("RunService"):IsClient() then
+	return
+end
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
+local PlayerGui = player:WaitForChild("PlayerGui")
+local ScreenGui = PlayerGui:WaitForChild("ScreenGui", 10)
+local datag2 = ScreenGui:WaitForChild("datag2", 10)
+local Main = datag2:WaitForChild("Main", 10)
+local Main2 = Main:WaitForChild("Main2", 10)
+Main.ImageTransparency = 0
+Main2.Visible = true
+Main2.ImageTransparency = 0.6
+task.wait(0.5)
+local tweenInfo = TweenInfo.new(
+	0.2,
+	Enum.EasingStyle.Quad,
+	Enum.EasingDirection.Out
+)
+local activeTween = nil
+local function flashMain2()
+	if activeTween then
+		activeTween:Cancel()
+	end
+	local fadeIn = TweenService:Create(Main2, tweenInfo, {ImageTransparency = 0})
+	activeTween = fadeIn
+	fadeIn:Play()
+	fadeIn.Completed:Wait()
+	local fadeOut = TweenService:Create(Main2, tweenInfo, {ImageTransparency = 0.6})
+	activeTween = fadeOut
+	fadeOut:Play()
+	fadeOut.Completed:Wait()
+end
+for i = 1, 2 do
+	flashMain2()
+	task.wait(0.08)
+end
+if activeTween then
+	activeTween:Cancel()
+end
+local hideOverlay = TweenService:Create(Main2, tweenInfo, {ImageTransparency = 1})
+activeTween = hideOverlay
+hideOverlay:Play()
